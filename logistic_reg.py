@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import pylab
 from scipy import stats
 from stats import compute_acc
-from utils import sigmoid, aug_sigmoid
+from utils import sigmoid, aug_sigmoid, get_lipschitz_mu
 from tqdm import tqdm
 
 
@@ -16,34 +16,6 @@ def gradient_comp(x, y, lamb, i, w):
 	y_i = y[i]
 	gradient = float(-y_i) * sigmoid(-y_i * np.dot(x_i, w)) * x_i
 	return gradient
-
-
-
-def get_lipschitz_mu(x, y, lamda, w):
-	n = x.shape[0]
-	p = x.shape[1]
-
-	# matrix = np.zeros((n,n))
-	# for i in range(n):
-	# 	x_i = x[i,:]
-	# 	x_i= x_i.reshape((-1, 1))
-	# 	x_it = x_i.T
-	# 	y_i = y[i]
-
-		# matrix += np.dot(x_i, x_it) * aug_sigmoid(y_i * np.dot(x_i, w))
-
-
-	matrix = (1./n) * (x.T.dot(x)) + 2. * lamda * np.eye(p)	
-
-	# matrix = (1. / n)  * matrix + 2 * lamda *  np.eye(p)	
-	eigenvalues = np.linalg.eig(matrix)[0]
-	L = max(eigenvalues)
-	mu = min(eigenvalues)
-	return L, mu
-
-
-
-
 
 def gradient_descent(x_train, y_train, x_test, y_test, alpha, T, lamb):
 	train_accuracies = []
@@ -150,8 +122,76 @@ def Nesterov_88(x_train, y_train, x_test, y_test, alpha, T, lamb):
 
 	return w, train_accuracies, test_accuracies	
 
+def cyclic_coord_gradient_descent(x_train, y_train, x_test, y_test, alpha, T, lamb):
+	train_accuracies = []
+	test_accuracies = []
+
+	n = x_train.shape[0]
+	p = x_train.shape[1]
+	w = np.ones(p)
+
+	for t in tqdm(range(0, T)):
+		gradient = 0
+		for i in range(n):
+			gradient += gradient_comp(x_train, y_train, lamb, i, w)
+		gradient = (1.0/n) * gradient + 2 * lamb * w
+		for k in range(p):
+			w[k] = w[k] - alpha * gradient[k] #* 1.04
+
+		train_acc, test_acc = compute_acc(x_train, y_train, x_test, y_test, w)
+		train_accuracies.append(train_acc)
+		test_accuracies.append(test_acc)
+
+	return w, train_accuracies, test_accuracies	
 
 
+def gauss_southwell_descent(x_train, y_train, x_test, y_test, alpha, T, lamb):
+	train_accuracies = []
+	test_accuracies = []
+
+	n = x_train.shape[0]
+	p = x_train.shape[1]
+	w = np.ones(p)
+
+	for t in tqdm(range(0, T)):
+		gradient = 0
+		for i in range(n):
+			gradient += gradient_comp(x_train, y_train, lamb, i, w)
+		gradient = (1.0/n) * gradient + 2 * lamb * w
+
+		k = np.argmax(abs(gradient))
+		w[k] = w[k] - alpha * gradient[k] #* 1.04
+
+		train_acc, test_acc = compute_acc(x_train, y_train, x_test, y_test, w)
+		train_accuracies.append(train_acc)
+		test_accuracies.append(test_acc)
+
+	return w, train_accuracies, test_accuracies
+
+
+def rand_coord_descent(x_train, y_train, x_test, y_test, alpha, T, lamb):
+	train_accuracies = []
+	test_accuracies = []
+
+	n = x_train.shape[0]
+	p = x_train.shape[1]
+	w = np.ones(p)
+
+	for t in tqdm(range(0, T)):
+		gradient = 0
+		for i in range(n):
+			gradient += gradient_comp(x_train, y_train, lamb, i, w)
+		gradient = (1.0/n) * gradient + 2 * lamb * w
+
+		for k in range(p):
+			j = random.randint(0,p-1)
+			w[j] = w[j] - alpha * gradient[j]
+
+		train_acc, test_acc = compute_acc(x_train, y_train, x_test, y_test, w)
+		train_accuracies.append(train_acc)
+		test_accuracies.append(test_acc)
+
+	return w, train_accuracies, test_accuracies			
 
 if __name__ == '__main__':
 	x_train=np.load('X_train.npy')
@@ -160,19 +200,23 @@ if __name__ == '__main__':
 	y_test=np.load('y_test.npy')
 
 	T = 1500
-	lamda = 0
+	lamda = 1
 	alpha = 0.005
 
-	print(get_lipschitz_mu(x_train, y_train, lamda, "y"))
 	w_GD, train_accuracies_GD, test_accuracies_GD = gradient_descent(x_train, y_train, x_test, y_test, alpha, T, lamda)
-	w_HB, train_accuracies_HB, test_accuracies_HB = heavy_ball_descent(x_train, y_train, x_test, y_test, alpha, T, lamda)
-	w_FISTA, train_accuracies_FISTA, test_accuracies_FISTA = FISTA_descent(x_train, y_train, x_test, y_test, alpha, T, lamda)
+	# w_HB, train_accuracies_HB, test_accuracies_HB = heavy_ball_descent(x_train, y_train, x_test, y_test, alpha, T, lamda)
+	# w_FISTA, train_accuracies_FISTA, test_accuracies_FISTA = FISTA_descent(x_train, y_train, x_test, y_test, alpha, T, lamda)
 	w_N88, train_accuracies_N88, test_accuracies_N88 = Nesterov_88(x_train, y_train, x_test, y_test, alpha, T, lamda)
+	# w_cyc, train_accuracies_cyc, test_accuracies_cyc = cyclic_coord_gradient_descent(x_train, y_train, x_test, y_test, alpha, T, lamda)
+	# w_gs, train_accuracies_gs, test_accuracies_gs = gauss_southwell_descent(x_train, y_train, x_test, y_test, alpha, T, lamda)
+	
 
 	x = np.arange(1., T + 1., 1.)
 
-	plt.plot(x, train_accuracies_GD, 'r--', test_accuracies_GD, 'r', train_accuracies_N88, 'b--',  test_accuracies_N88, 'b',
-				train_accuracies_HB, 'g--', test_accuracies_HB, 'g', train_accuracies_FISTA, '--m', test_accuracies_FISTA, 'm')
+	# plt.plot(x, train_accuracies_GD, 'r--', test_accuracies_GD, 'r', train_accuracies_N88, 'b--',  test_accuracies_N88, 'b',
+	# 			train_accuracies_HB, 'g--', test_accuracies_HB, 'g', train_accuracies_FISTA, '--m', test_accuracies_FISTA, 'm',
+	# 			train_accuracies_cyc, 'k--', test_accuracies_cyc, 'k')
+	plt.plot(x, train_accuracies_GD, 'r--', test_accuracies_GD, 'r', train_accuracies_N88, 'k--', test_accuracies_N88, 'k')
 	plt.title("T = {}, lambda = {}, alpha = {}".format(T, lamda, alpha))
 	plt.show()
 

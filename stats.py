@@ -44,7 +44,7 @@ def compute_acc_SVM(x_train, y_train, x_test, y_test, w):
 	for i in range(n):
 		x_i = x_train[i]
 		y_i = y_train[i]
-		y = 1 if np.dot(w, x_i) >= 0 else -1
+		y = -1 if np.dot(w, x_i) > 0 else 1
 		train_acc += (y != y_i)
 	
 	train_acc = float(train_acc) / float(n)
@@ -54,7 +54,7 @@ def compute_acc_SVM(x_train, y_train, x_test, y_test, w):
 		x_i = x_test[i]
 		y_i = y_test[i]
 		prob = sigmoid(np.dot(w, x_i))
-		y = 1 if np.dot(w, x_i) >= 0 else -1
+		y = -1 if np.dot(w, x_i) > 0 else 1
 		test_acc += (y != y_i)
 	
 	test_acc = float(test_acc) / float(m)
